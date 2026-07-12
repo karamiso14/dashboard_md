@@ -32,10 +32,12 @@ document.querySelectorAll('#document img, #document video, #document audio, #doc
 
 type pageData struct { Title, Root, Path string; Navigation, Breadcrumb, Content template.HTML }
 type viewer struct { root string; md goldmark.Markdown }
+type navFile struct { name, rel string }
+type navFolder struct { name, rel string; folders map[string]*navFolder; files []navFile }
 
 func main() {
-	dir := flag.String("dir", ".", "Markdown folder to serve")
-	addr := flag.String("addr", "127.0.0.1:8080", "address to listen on")
+	dir := flag.String("dir", "./md", "Markdown folder to serve")
+	addr := flag.String("addr", "0.0.0.0:8080", "address to listen on")
 	flag.Parse()
 	root, err := filepath.Abs(*dir); if err != nil { log.Fatal(err) }
 	info, err := os.Stat(root); if err != nil || !info.IsDir() { log.Fatalf("invalid directory: %s", root) }
@@ -48,7 +50,40 @@ func (v *viewer) handle(w http.ResponseWriter, r *http.Request) { if r.URL.Path 
 func (v *viewer) safePath(encoded string) (string, string, error) { p, err := url.PathUnescape(encoded); if err != nil { return "", "", err }; p = path.Clean("/" + strings.TrimPrefix(p, "/")); if p == "/" || strings.Contains(p, "\\") { return "", "", errors.New("invalid path") }; rel := strings.TrimPrefix(p, "/"); full := filepath.Join(v.root, filepath.FromSlash(rel)); check, err := filepath.Rel(v.root, full); if err != nil || check == ".." || strings.HasPrefix(check, ".."+string(filepath.Separator)) { return "", "", errors.New("outside root") }; return rel, full, nil }
 func (v *viewer) serveRaw(w http.ResponseWriter, r *http.Request) { _, full, err := v.safePath(strings.TrimPrefix(r.URL.Path, "/raw/")); if err != nil { http.NotFound(w, r); return }; http.ServeFile(w, r, full) }
 func (v *viewer) serveDocument(w http.ResponseWriter, r *http.Request) { rel, full, err := v.safePath(strings.TrimPrefix(r.URL.Path, "/view/")); if err != nil || !strings.EqualFold(filepath.Ext(rel), ".md") { http.NotFound(w, r); return }; source, err := os.ReadFile(full); if err != nil { http.NotFound(w, r); return }; var rendered bytes.Buffer; if err := v.md.Convert(source, &rendered); err != nil { http.Error(w, "could not render Markdown", http.StatusInternalServerError); return }; w.Header().Set("Content-Type", "text/html; charset=utf-8"); if err := pageTemplate.Execute(w, pageData{titleFrom(rel), filepath.Base(v.root), filepath.ToSlash(rel), v.navigation(rel), v.breadcrumb(rel), template.HTML(rendered.String())}); err != nil { log.Println(err) } }
-func (v *viewer) defaultDocument() string { for _, name := range []string{"README.md", "readme.md", "index.md", "INDEX.md"} { if _, err := os.Stat(filepath.Join(v.root, name)); err == nil { return name } }; var first string; filepath.WalkDir(v.root, func(p string, d fs.DirEntry, err error) error { if err == nil && !d.IsDir() && strings.EqualFold(filepath.Ext(p), ".md") && first == "" { first, _ = filepath.Rel(v.root, p) }; return nil }); return filepath.ToSlash(first) }
-func (v *viewer) navigation(current string) template.HTML { var files []string; filepath.WalkDir(v.root, func(p string, d fs.DirEntry, err error) error { if err == nil && !d.IsDir() && strings.EqualFold(filepath.Ext(p), ".md") { rel, _ := filepath.Rel(v.root, p); files = append(files, filepath.ToSlash(rel)) }; return nil }); sort.Strings(files); var b strings.Builder; b.WriteString("<ul>"); for _, f := range files { cls := ""; if f == current { cls = ` class="active"` }; fmt.Fprintf(&b, `<li><a%s href="/view/%s">%s</a></li>`, cls, url.PathEscape(f), template.HTMLEscapeString(f)) }; b.WriteString("</ul>"); return template.HTML(b.String()) }
+func (v *viewer) defaultDocument() string { for _, name := range []string{"index.md", "INDEX.md"} { if _, err := os.Stat(filepath.Join(v.root, name)); err == nil { return name } }; var first string; filepath.WalkDir(v.root, func(p string, d fs.DirEntry, err error) error { if err == nil && !d.IsDir() && strings.EqualFold(filepath.Ext(p), ".md") && first == "" { first, _ = filepath.Rel(v.root, p) }; return nil }); return filepath.ToSlash(first) }
+func (v *viewer) navigation(current string) template.HTML {
+	root := &navFolder{folders: make(map[string]*navFolder)}
+	filepath.WalkDir(v.root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.EqualFold(filepath.Ext(p), ".md") { return nil }
+		rel, err := filepath.Rel(v.root, p); if err != nil { return nil }
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		folder := root
+		for i, part := range parts[:len(parts)-1] {
+			if folder.folders[part] == nil { folder.folders[part] = &navFolder{name: part, rel: strings.Join(parts[:i+1], "/"), folders: make(map[string]*navFolder)} }
+			folder = folder.folders[part]
+		}
+		folder.files = append(folder.files, navFile{name: parts[len(parts)-1], rel: strings.Join(parts, "/")})
+		return nil
+	})
+	var b strings.Builder
+	v.renderFolder(&b, root, current)
+	return template.HTML(b.String())
+}
+func (v *viewer) renderFolder(b *strings.Builder, folder *navFolder, current string) {
+	b.WriteString("<ul>")
+	names := make([]string, 0, len(folder.folders)); for name := range folder.folders { names = append(names, name) }; sort.Strings(names)
+	for _, name := range names {
+		child := folder.folders[name]; open := ""; if strings.HasPrefix(current, child.rel+"/") { open = " open" }
+		fmt.Fprintf(b, `<li><details%s><summary>%s</summary>`, open, template.HTMLEscapeString(child.name))
+		v.renderFolder(b, child, current)
+		b.WriteString("</details></li>")
+	}
+	sort.Slice(folder.files, func(i, j int) bool { return folder.files[i].name < folder.files[j].name })
+	for _, file := range folder.files {
+		class := ""; if file.rel == current { class = ` class="active"` }
+		fmt.Fprintf(b, `<li><a%s href="/view/%s">%s</a></li>`, class, url.PathEscape(file.rel), template.HTMLEscapeString(file.name))
+	}
+	b.WriteString("</ul>")
+}
 func (v *viewer) breadcrumb(rel string) template.HTML { parts := strings.Split(rel, "/"); var b strings.Builder; b.WriteString(`<a href="/">Home</a> / `); for i, part := range parts { if i > 0 { b.WriteString(" / ") }; b.WriteString(template.HTMLEscapeString(part)) }; return template.HTML(b.String()) }
 func titleFrom(rel string) string { return strings.TrimSuffix(path.Base(rel), path.Ext(rel)) }
