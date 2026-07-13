@@ -1,6 +1,6 @@
 root = "."
-tmp_dir = "tmp"
+tmp_dir = "/tmp/air"
 
 [build]
-cmd = "go build -buildvcs=false -o ./tmp/main ."
-bin = "tmp/main"
+cmd = "go build -buildvcs=false -o /tmp/air/main ."
+bin = "/tmp/air/main"
