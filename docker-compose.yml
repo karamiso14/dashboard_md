@@ -3,5 +3,11 @@ services:
     build: .
     ports:
       - "8080:8080"
+    environment:
+      MARKDOWN_DIR: /markdown
     volumes:
       - .:/app
+      - type: bind
+        source: ${MARKDOWN_SOURCE_DIR:-./md}
+        target: /markdown
+        read_only: true

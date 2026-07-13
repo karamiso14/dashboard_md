@@ -1,48 +1,89 @@
 # Markdown Viewer
 
-指定したフォルダ内の Markdown をブラウザで読むための、Go製ローカルサーバーです。
+Markdownフォルダをブラウザで閲覧するための、Go製ローカルサーバーです。Dockerで起動し、個人作業用のポータルとして利用できます。
 
-## できること
+## 主な機能
 
-- フォルダ内の `.md` ファイルをサイドバーに一覧表示
-- `README.md` / `readme.md` / `index.md` を起点として自動表示
-- Markdown内の相対 `.md` リンクをビューア内で遷移
-- 相対パスで書かれた画像・音声・動画を表示
-- GitHub Flavored Markdown（テーブル、取り消し線、タスクリストなど）をサポート
-- 指定フォルダの外へアクセスできないように制限
+- `index.md` をトップページとして表示
+- Markdownファイルをサイドバーのフォルダツリーに表示
+- フォルダツリーを折りたたみ・展開
+- 相対 `.md` リンクをビューア内で遷移
+- 相対パスで指定した画像・音声・動画を表示
+- GitHub Flavored Markdown（テーブル、タスクリスト、取り消し線など）に対応
+- 指定したMarkdownフォルダ外へのアクセスを防止
+
+## 必要なもの
+
+- Docker Desktop
 
 ## 起動
 
-Go 1.22以降をインストールして、プロジェクトのフォルダで以下を実行します。
+プロジェクト直下で実行します。
 
 ```powershell
-go mod tidy
-go run . -dir .
+docker compose down
+docker compose up --build
 ```
 
-ブラウザで `http://127.0.0.1:8080` を開いてください。
+ブラウザで [http://localhost:8080](http://localhost:8080) を開きます。
 
-表示対象を別のフォルダにする場合:
+バックグラウンドで起動する場合は、次のようにします。
 
 ```powershell
-go run . -dir C:\path\to\markdown-folder
+docker compose up --build -d
 ```
 
-ポートを変える場合:
+停止する場合:
 
 ```powershell
-go run . -dir . -addr 127.0.0.1:3000
+docker compose down
 ```
 
-## リンクの書き方
+## 表示するMarkdownフォルダの設定
 
-同じフォルダまたは子フォルダのMarkdownへ、通常どおり相対リンクを書けます。
+標準では、このプロジェクト内の `md` フォルダを表示します。別PCや別の保管場所にあるMarkdownフォルダを使う場合は、設定ファイルを作成します。
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` の `MARKDOWN_SOURCE_DIR` に、表示したいMarkdownフォルダを設定してください。
+
+```ini
+# プロジェクト直下の md フォルダを使う場合
+MARKDOWN_SOURCE_DIR=./md
+
+# プロジェクトと同じ階層にある my-notes フォルダを使う場合
+# MARKDOWN_SOURCE_DIR=../my-notes
+```
+
+設定を変更した後は、`docker compose down` と `docker compose up --build` を実行して再起動します。指定したフォルダはコンテナに読み取り専用でマウントされます。
+
+## Markdownの構成例
+
+`index.md` がトップページです。相対リンクで他のページへつなげられます。
+
+```text
+md/
+├── index.md
+├── schedule/
+│   └── weekly-plan.md
+├── tasks/
+│   └── now.md
+└── knowledge/
+    └── development-notes.md
+```
 
 ```md
-[セットアップ手順](docs/setup.md)
-![画面例](images/screenshot.png)
+# 個人作業ポータル
+
+- [今週の予定](schedule/weekly-plan.md)
+- [今日やること](tasks/now.md)
+- [開発メモ](knowledge/development-notes.md)
 ```
 
-`setup.md` を開いているときは、`[次へ](next.md)` のようなリンクも正しく解決されます。
+画像も同様に相対パスで参照できます。
 
-[セットアップ手順](docs/setup.md)
+```md
+![画面例](images/screenshot.png)
+```
