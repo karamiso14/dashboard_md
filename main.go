@@ -275,7 +275,7 @@ func (v *viewer) recentFiles() []recentFile {
 		files = append(files, recentFile{
 			Title:     titleFrom(rel),
 			Path:      rel,
-			ViewPath:  "/view/" + url.PathEscape(rel),
+			ViewPath:  rel,
 			UpdatedAt: info.ModTime().Format("2006/01/02 15:04"),
 			modTime:   info.ModTime(),
 		})
@@ -362,7 +362,7 @@ func (v *viewer) renderFolder(b *strings.Builder, folder *navFolder, current str
 		if file.rel == current {
 			class = ` class="active"`
 		}
-		fmt.Fprintf(b, `<li><a%s href="/view/%s">%s</a></li>`, class, url.PathEscape(file.rel), template.HTMLEscapeString(file.name))
+		fmt.Fprintf(b, `<li><a%s href="%s">%s</a></li>`, class, viewPath(file.rel), template.HTMLEscapeString(file.name))
 	}
 	b.WriteString("</ul>")
 }
