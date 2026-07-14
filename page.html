@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{.Title}} | Markdown Viewer</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #f8fafc; --panel: #fff; --text: #1e293b; --muted: #64748b; --line: #e2e8f0; --accent: #2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 100vh; }
+    aside { padding: 20px; border-right: 1px solid var(--line); background: var(--panel); }
+    .brand { display: block; color: var(--text); font-weight: 700; text-decoration: none; margin-bottom: 18px; }
+    .root { font-size: .78rem; color: var(--muted); overflow-wrap: anywhere; margin: 0 0 14px; }
+    nav ul { list-style: none; padding-left: 14px; margin: 4px 0; }
+    nav > ul { padding-left: 0; }
+    nav li { margin: 3px 0; }
+    nav a { display: block; padding: 4px 6px; border-radius: 5px; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+    nav a:hover, nav a.active { background: #dbeafe; color: #1d4ed8; }
+    main { max-width: 980px; width: 100%; padding: 44px clamp(24px, 5vw, 72px); margin: 0 auto; }
+    .crumb { font-size: .86rem; color: var(--muted); margin-bottom: 26px; overflow-wrap: anywhere; }
+    .crumb a { color: inherit; }
+    article { line-height: 1.75; }
+    article h1, article h2, article h3 { line-height: 1.25; margin-top: 1.65em; }
+    article h1 { font-size: 2em; border-bottom: 1px solid var(--line); padding-bottom: .35em; }
+    article h2 { border-bottom: 1px solid var(--line); padding-bottom: .25em; }
+    article a { color: var(--accent); }
+    article img { max-width: 100%; height: auto; }
+    article pre { overflow: auto; padding: 16px; background: #0f172a; color: #e2e8f0; border-radius: 8px; }
+    article code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    article :not(pre) > code { padding: .15em .35em; background: #e2e8f0; border-radius: 4px; }
+    article blockquote { border-left: 4px solid var(--line); margin-left: 0; padding-left: 16px; color: var(--muted); }
+    article table { border-collapse: collapse; display: block; overflow: auto; }
+    article th, article td { border: 1px solid var(--line); padding: 7px 10px; }
+    .portal { max-width: 1100px; }
+    .portal > h1 { font-size: 2.5rem; border: 0; margin-top: 0; }
+    .portal-search { max-width: 700px; margin: 0 auto 3.5rem; text-align: center; }
+    .portal-search label { display: block; font-size: 1.05rem; font-weight: 650; margin-bottom: 12px; }
+    .portal-search input { width: 100%; padding: 18px 22px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); font: inherit; font-size: 1.15rem; box-shadow: 0 4px 16px rgba(15,23,42,.06); }
+    .portal-search input:focus { outline: 3px solid #bfdbfe; border-color: var(--accent); }
+    .search-results { display: grid; gap: 8px; text-align: left; margin-top: 14px; }
+    .search-results a { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); text-decoration: none; }
+    .search-results a:hover { border-color: var(--accent); }
+    .search-results small { display: block; color: var(--muted); margin-top: 3px; }
+    .portal h2 { border: 0; font-size: 1.1rem; letter-spacing: .04em; margin: 2.5rem 0 .8rem; }
+    .portal h2 + ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 0; }
+    .portal h2 + ul li { margin: 0; }
+    .portal h2 + ul a { display: flex; align-items: center; min-height: 80px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); font-weight: 650; text-decoration: none; box-shadow: 0 1px 2px rgba(15,23,42,.04); transition: transform .15s, box-shadow .15s, border-color .15s; }
+    .portal h2 + ul a:hover { border-color: var(--accent); box-shadow: 0 8px 20px rgba(37,99,235,.14); transform: translateY(-2px); }
+    @media (max-width: 760px) { .layout { display: block; } aside { border-right: 0; border-bottom: 1px solid var(--line); } main { padding-top: 28px; } nav { max-height: 220px; overflow: auto; } .portal > h1 { font-size: 2rem; } .portal h2 + ul { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside><a class="brand" href="/">Markdown Viewer</a><p class="root">{{.Root}}</p><nav>{{.Navigation}}</nav></aside>
+    <main><div class="crumb">{{.Breadcrumb}}</div><article id="document"{{if .Portal}} class="portal"{{end}}>{{if .Portal}}<section class="portal-search"><label for="search-input">ページを検索</label><input id="search-input" type="search" placeholder="ファイル名・本文で検索" autocomplete="off"><div id="search-results" class="search-results" aria-live="polite"></div></section>{{end}}{{.Content}}</article></main>
+  </div>
+  <script>
+    const mdPath = {{printf "%q" .Path}};
+    const viewerOrigin = 'https://viewer.invalid/';
+
+    function viewerPath(value) {
+      return new URL(value, viewerOrigin + mdPath).pathname.replace(/^\//, '');
+    }
+
+    // Markdown links stay inside the viewer, but external links are left alone.
+    document.querySelectorAll('#document a').forEach(link => {
+      const href = link.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      try {
+        const target = new URL(href, viewerOrigin + mdPath);
+        if (target.origin === 'https://viewer.invalid' && /\.md$/i.test(target.pathname)) {
+          link.href = '/view/' + encodeURIComponent(target.pathname.slice(1)).replace(/%2F/g, '/');
+          if (target.hash) link.href += target.hash;
+        }
+      } catch (_) {}
+    });
+
+    document.querySelectorAll('#document img, #document video, #document audio, #document source').forEach(element => {
+      const src = element.getAttribute('src');
+      if (!src || /^(https?:|data:|#)/i.test(src)) return;
+      try { element.src = '/raw/' + encodeURIComponent(viewerPath(src)).replace(/%2F/g, '/'); } catch (_) {}
+    });
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+      let searchTimer;
+      const results = document.getElementById('search-results');
+
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        const query = searchInput.value.trim();
+        if (!query) { results.replaceChildren(); return; }
+
+        // Wait briefly for another keystroke before starting a request.
+        searchTimer = setTimeout(async () => {
+          try {
+            const response = await fetch('/api/search?q=' + encodeURIComponent(query));
+            const items = await response.json();
+            results.replaceChildren(...items.map(item => {
+              const link = document.createElement('a');
+              link.href = '/view/' + encodeURIComponent(item.path).replace(/%2F/g, '/');
+              link.textContent = item.title;
+              const detail = document.createElement('small');
+              detail.textContent = item.path + (item.matches.length ? ' — ' + item.matches.join('、') : '');
+              link.append(detail);
+              return link;
+            }));
+            if (!items.length) results.textContent = '該当するページはありません。';
+          } catch (_) { results.textContent = '検索に失敗しました。'; }
+        }, 180);
+      });
+    }
+  </script>
+</body>
+</html>
