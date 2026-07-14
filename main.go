@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -28,6 +29,7 @@ const (
 	maxSearchResults   = 20
 	maxSearchSnippets  = 2
 	maxSnippetRunes    = 100
+	maxRecentFiles     = 5
 )
 
 // ページのHTMLを埋め込むことで、Goサーバーを単一バイナリのまま保ちつつ、
@@ -39,13 +41,14 @@ var pageHTML string
 var pageTemplate = template.Must(template.New("page").Parse(pageHTML))
 
 type pageData struct {
-	Title      string
-	Root       string
-	Path       string
-	Navigation template.HTML
-	Breadcrumb template.HTML
-	Content    template.HTML
-	Portal     bool
+	Title       string
+	Root        string
+	Path        string
+	Navigation  template.HTML
+	Breadcrumb  template.HTML
+	Content     template.HTML
+	Portal      bool
+	RecentFiles []recentFile
 }
 
 type viewer struct {
@@ -67,6 +70,15 @@ type searchResult struct {
 	Title   string   `json:"title"`
 	Path    string   `json:"path"`
 	Matches []string `json:"matches"`
+}
+
+// recentFile はトップページに表示する、最近更新されたファイルの情報。
+type recentFile struct {
+	Title     string
+	Path      string
+	ViewPath  string
+	UpdatedAt string
+	modTime   time.Time
 }
 
 func main() {
@@ -223,6 +235,7 @@ func (v *viewer) serveDocument(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not render Markdown", http.StatusInternalServerError)
 		return
 	}
+	isPortal := strings.EqualFold(path.Base(rel), "index.md")
 	data := pageData{
 		Title:      titleFrom(rel),
 		Root:       filepath.Base(v.root),
@@ -230,13 +243,55 @@ func (v *viewer) serveDocument(w http.ResponseWriter, r *http.Request) {
 		Navigation: v.navigation(rel),
 		Breadcrumb: v.breadcrumb(rel),
 		Content:    template.HTML(rendered.String()),
-		Portal:     strings.EqualFold(path.Base(rel), "index.md"),
+		Portal:     isPortal,
+	}
+	if isPortal {
+		data.RecentFiles = v.recentFiles()
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTemplate.Execute(w, data); err != nil {
 		log.Println(err)
 	}
+}
+
+// recentFiles は更新日時の新しい Markdown ファイルを、表示上限まで返す。
+func (v *viewer) recentFiles() []recentFile {
+	files := make([]recentFile, 0, maxRecentFiles)
+	filepath.WalkDir(v.root, func(fullPath string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(fullPath), ".md") {
+			return nil
+		}
+
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(v.root, fullPath)
+		if err != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		files = append(files, recentFile{
+			Title:     titleFrom(rel),
+			Path:      rel,
+			ViewPath:  "/view/" + url.PathEscape(rel),
+			UpdatedAt: info.ModTime().Format("2006/01/02 15:04"),
+			modTime:   info.ModTime(),
+		})
+		return nil
+	})
+
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].modTime.Equal(files[j].modTime) {
+			return files[i].Path < files[j].Path
+		}
+		return files[i].modTime.After(files[j].modTime)
+	})
+	if len(files) > maxRecentFiles {
+		files = files[:maxRecentFiles]
+	}
+	return files
 }
 
 // defaultDocument は index.md を優先し、なければ最初の Markdown ファイルを使う。

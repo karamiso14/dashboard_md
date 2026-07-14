@@ -6,6 +6,7 @@
 
 - [今週の予定](schedule/weekly-plan.md)
 - [締め切り一覧](schedule/deadlines.md)
+- [外部リンクテスト](https://www.example.com)
 
 ## 📄 仕様書
 

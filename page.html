@@ -42,6 +42,13 @@
     .search-results a { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); text-decoration: none; }
     .search-results a:hover { border-color: var(--accent); }
     .search-results small { display: block; color: var(--muted); margin-top: 3px; }
+    .recent-files { margin: 0 0 3.5rem; }
+    .recent-files h2 { border: 0; font-size: 1.1rem; letter-spacing: .04em; margin: 0 0 .8rem; }
+    .recent-file-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .recent-file { display: block; min-height: 88px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--text); font-weight: 650; text-decoration: none; box-shadow: 0 1px 2px rgba(15,23,42,.04); transition: transform .15s, box-shadow .15s, border-color .15s; }
+    .recent-file:hover { border-color: var(--accent); box-shadow: 0 8px 20px rgba(37,99,235,.14); transform: translateY(-2px); }
+    .recent-file small { display: block; margin-top: 5px; color: var(--muted); font-size: .8rem; font-weight: 400; overflow-wrap: anywhere; }
+    .recent-files-empty { margin: 0; color: var(--muted); }
     .portal h2 { border: 0; font-size: 1.1rem; letter-spacing: .04em; margin: 2.5rem 0 .8rem; }
     .portal h2 + ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 0; }
     .portal h2 + ul li { margin: 0; }
@@ -53,7 +60,7 @@
 <body>
   <div class="layout">
     <aside><a class="brand" href="/">Markdown Viewer</a><p class="root">{{.Root}}</p><nav>{{.Navigation}}</nav></aside>
-    <main><div class="crumb">{{.Breadcrumb}}</div><article id="document"{{if .Portal}} class="portal"{{end}}>{{if .Portal}}<section class="portal-search"><label for="search-input">ページを検索</label><input id="search-input" type="search" placeholder="ファイル名・本文で検索" autocomplete="off"><div id="search-results" class="search-results" aria-live="polite"></div></section>{{end}}{{.Content}}</article></main>
+    <main><div class="crumb">{{.Breadcrumb}}</div><article id="document"{{if .Portal}} class="portal"{{end}}>{{if .Portal}}<section class="portal-search"><label for="search-input">ページを検索</label><input id="search-input" type="search" placeholder="ファイル名・本文で検索" autocomplete="off"><div id="search-results" class="search-results" aria-live="polite"></div></section><section class="recent-files"><h2>最近更新したファイル</h2>{{if .RecentFiles}}<div class="recent-file-list">{{range .RecentFiles}}<a class="recent-file" href="{{.ViewPath}}">{{.Title}}<small>{{.Path}} · {{.UpdatedAt}}</small></a>{{end}}</div>{{else}}<p class="recent-files-empty">表示できるファイルはありません。</p>{{end}}</section>{{end}}{{.Content}}</article></main>
   </div>
   <script>
     const mdPath = {{printf "%q" .Path}};
